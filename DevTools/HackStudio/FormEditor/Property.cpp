@@ -24,40 +24,40 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
-
-#include <AK/Badge.h>
-#include <LibGUI/Widget.h>
+#include "Property.h"
+#include "FormWidget.h"
 
 namespace HackStudio {
 
-class CursorTool;
-class FormEditorWidget;
+Property::Property(HackStudio::FormWidget& widget, const AK::String& name, const GUI::Variant& value)
+    : m_widget(widget)
+    , m_name(name)
+    , m_value(value)
+{
+}
 
-class FormWidget final : public GUI::Widget {
-    C_OBJECT(FormWidget)
-public:
-    virtual ~FormWidget() override;
+Property::Property(HackStudio::FormWidget& widget, const String& name, Function<GUI::Variant(const GUI::Widget&)>&& getter, Function<void(GUI::Widget&, const GUI::Variant&)>&& setter)
+    : m_widget(widget)
+    , m_name(name)
+    , m_getter(move(getter))
+    , m_setter(move(setter))
+{
+    ASSERT(m_getter);
+    ASSERT(m_setter);
+}
 
-    FormEditorWidget& editor();
-    const FormEditorWidget& editor() const;
+Property::~Property()
+{
+}
 
-    // FIXME: This should be an app-wide preference instead.
-    int grid_size() const { return m_grid_size; }
-
-private:
-    virtual bool accepts_focus() const override { return true; }
-
-    virtual void paint_event(GUI::PaintEvent&) override;
-    virtual void second_paint_event(GUI::PaintEvent&) override;
-    virtual void mousedown_event(GUI::MouseEvent&) override;
-    virtual void mouseup_event(GUI::MouseEvent&) override;
-    virtual void mousemove_event(GUI::MouseEvent&) override;
-    virtual void keydown_event(GUI::KeyEvent&) override;
-
-    FormWidget();
-
-    int m_grid_size { 5 };
-};
+void Property::set_value(const GUI::Variant& value)
+{
+    if (m_value == value)
+        return;
+    m_value = value;
+    if (m_setter)
+        m_setter(*m_widget.gwidget(), value);
+    m_widget.property_did_change();
+}
 
 }

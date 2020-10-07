@@ -26,27 +26,39 @@
 
 #pragma once
 
-#include "Tool.h"
+#include <AK/Function.h>
+#include <AK/String.h>
+#include <LibGUI/Forward.h>
+#include <LibGUI/Variant.h>
 
 namespace HackStudio {
 
-class WidgetTool final : public Tool {
+class FormWidget;
+
+class Property {
+    friend class FormWidget;
+
 public:
-    explicit WidgetTool(FormEditorWidget& editor, const GUI::WidgetClassRegistration& meta_class)
-        : Tool(editor)
-        , m_meta_class(meta_class)
-    {
-    }
-    virtual ~WidgetTool() override { }
+    Property(FormWidget&, const String& name, const GUI::Variant& value);
+    Property(FormWidget&, const String& name, Function<GUI::Variant(const GUI::Widget&)>&& getter, Function<void(GUI::Widget&, const GUI::Variant&)>&& setter);
+    ~Property();
+
+    String name() const { return m_name; }
+    const GUI::Variant& value() const { return m_value; }
+    void set_value(const GUI::Variant&);
+
+    bool is_readonly() const { return m_readonly; }
+    void set_readonly(bool b) { m_readonly = b; }
+
+    void sync();
 
 private:
-    virtual const char* class_name() const override { return "WidgetTool"; }
-    virtual void on_mousedown(GUI::MouseEvent&) override;
-    virtual void on_mouseup(GUI::MouseEvent&) override;
-    virtual void on_mousemove(GUI::MouseEvent&) override;
-    virtual void on_keydown(GUI::KeyEvent&) override;
-
-    const GUI::WidgetClassRegistration& m_meta_class;
+    FormWidget& m_widget;
+    String m_name;
+    GUI::Variant m_value;
+    Function<GUI::Variant(const GUI::Widget&)> m_getter;
+    Function<void(GUI::Widget&, const GUI::Variant&)> m_setter;
+    bool m_readonly { false };
 };
 
 }

@@ -24,33 +24,23 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "WidgetTool.h"
-#include <AK/LogStream.h>
+#pragma once
+
+#include <LibGUI/Window.h>
 
 namespace HackStudio {
 
-void WidgetTool::on_mousedown(GUI::MouseEvent& event)
-{
-    (void)event;
-    dbg() << "WidgetTool::on_mousedown";
-}
+class PropertiesWindow final : public GUI::Window {
+    C_OBJECT(PropertiesWindow)
+public:
+    PropertiesWindow();
+    ~PropertiesWindow();
 
-void WidgetTool::on_mouseup(GUI::MouseEvent& event)
-{
-    (void)event;
-    dbg() << "WidgetTool::on_mouseup";
-}
+    GUI::TableView& table_view() { return *m_table_view; }
+    const GUI::TableView& table_view() const { return *m_table_view; }
 
-void WidgetTool::on_mousemove(GUI::MouseEvent& event)
-{
-    (void)event;
-    dbg() << "WidgetTool::on_mousemove";
-}
-
-void WidgetTool::on_keydown(GUI::KeyEvent& event)
-{
-    (void)event;
-    dbg() << "WidgetTool::on_keydown";
-}
+private:
+    RefPtr<GUI::TableView> m_table_view;
+};
 
 }

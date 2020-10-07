@@ -24,46 +24,33 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "FormEditorWidget.h"
-#include "CursorTool.h"
-#include "FormWidget.h"
-#include "WidgetTreeModel.h"
-#include <LibGUI/Painter.h>
+#pragma once
+
+#include "WidgetType.h"
+#include <AK/HashMap.h>
+#include <AK/NonnullOwnPtrVector.h>
+#include <AK/OwnPtr.h>
+#include <AK/String.h>
+#include <LibGUI/Widget.h>
 
 namespace HackStudio {
 
-FormEditorWidget::FormEditorWidget()
-    : m_tool(make<CursorTool>(*this))
-{
-    set_fill_with_background_color(true);
-    set_background_color(Color::MidGray);
+class Property;
+class FormWidget;
 
-    m_form_widget = add<FormWidget>();
-    m_widget_tree_model = WidgetTreeModel::create(*m_form_widget);
-}
+class WidgetRegistry {
+public:
+    template<typename Callback>
+    static void for_each_widget_type(Callback callback)
+    {
+        for (unsigned i = 1; i < (unsigned)WidgetType::__Count; ++i)
+            callback((WidgetType)i);
+    }
 
-FormEditorWidget::~FormEditorWidget()
-{
-}
+    static RefPtr<GUI::Widget> build_gwidget(FormWidget&, WidgetType, GUI::Widget* parent, NonnullOwnPtrVector<Property>&);
+};
 
-void FormEditorWidget::paint_event(GUI::PaintEvent& event)
-{
-    GUI::Frame::paint_event(event);
-
-    GUI::Painter painter(*this);
-    painter.add_clip_rect(event.rect());
-}
-
-void FormEditorWidget::set_tool(NonnullOwnPtr<Tool> tool)
-{
-    m_tool->detach();
-    m_tool = move(tool);
-    m_tool->attach();
-}
-
-WidgetTreeModel& FormEditorWidget::model()
-{
-    return *m_widget_tree_model;
-}
+String to_class_name(WidgetType);
+WidgetType widget_type_from_class_name(const StringView&);
 
 }
