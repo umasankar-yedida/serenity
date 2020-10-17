@@ -28,16 +28,14 @@
 
 #include "GenericConvolutionFilter.h"
 
-namespace PixelPaint {
+namespace Gfx {
 
-class LaplacianFilter : public GenericConvolutionFilter<3> {
+class SharpenFilter : public GenericConvolutionFilter<3> {
 public:
-    LaplacianFilter();
-    virtual ~LaplacianFilter();
+    SharpenFilter() { }
+    virtual ~SharpenFilter() { }
 
-    virtual const char* class_name() const override { return "LaplacianFilter"; }
-
-    OwnPtr<GenericConvolutionFilter::Parameters> get_parameters(Gfx::Bitmap&, const Gfx::IntRect&, bool diagonal);
+    virtual const char* class_name() const override { return "SharpenFilter"; }
 };
 
 }

@@ -24,22 +24,19 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "SharpenFilter.h"
-#include "../ImageEditor.h"
+#pragma once
 
-namespace PixelPaint {
+#include "GenericConvolutionFilter.h"
 
-SharpenFilter::SharpenFilter()
-{
-}
+namespace Gfx {
 
-SharpenFilter::~SharpenFilter()
-{
-}
+template<size_t N>
+class BoxBlurFilter : public GenericConvolutionFilter<N> {
+public:
+    BoxBlurFilter() { }
+    virtual ~BoxBlurFilter() { }
 
-OwnPtr<GenericConvolutionFilter<3>::Parameters> SharpenFilter::get_parameters(Gfx::Bitmap& bitmap, const Gfx::IntRect& rect)
-{
-    return make<GenericConvolutionFilter<3>::Parameters>(bitmap, rect, Matrix<3, float>(0, -1, 0, -1, 5, -1, 0, -1, 0));
-}
+    virtual const char* class_name() const override { return "BoxBlurFilter"; }
+};
 
 }

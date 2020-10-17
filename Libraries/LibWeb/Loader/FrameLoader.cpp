@@ -202,6 +202,13 @@ bool FrameLoader::load(const URL& url, Type type)
     return load(request, type);
 }
 
+void FrameLoader::load_html(const StringView& html, const URL& url)
+{
+    HTML::HTMLDocumentParser parser(html, "utf-8");
+    parser.run(url);
+    frame().set_document(&parser.document());
+}
+
 void FrameLoader::load_error_page(const URL& failed_url, const String& error)
 {
     auto error_page_url = "file:///res/html/error.html";
@@ -216,7 +223,6 @@ void FrameLoader::load_error_page(const URL& failed_url, const String& error)
             auto document = HTML::parse_html_document(html, failed_url, "utf-8");
             ASSERT(document);
             frame().set_document(document);
-            frame().page().client().page_did_change_title(document->title());
         },
         [](auto error) {
             dbg() << "Failed to load error page: " << error;
@@ -249,7 +255,6 @@ void FrameLoader::resource_did_load()
     }
 
     frame().set_document(document);
-    frame().page().client().page_did_change_title(document->title());
 
     if (!url.fragment().is_empty())
         frame().scroll_to_anchor(url.fragment());

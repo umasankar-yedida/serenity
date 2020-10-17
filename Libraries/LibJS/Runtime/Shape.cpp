@@ -73,21 +73,21 @@ Shape::Shape(GlobalObject& global_object)
 }
 
 Shape::Shape(Shape& previous_shape, const StringOrSymbol& property_name, PropertyAttributes attributes, TransitionType transition_type)
-    : m_global_object(previous_shape.m_global_object)
+    : m_attributes(attributes)
+    , m_transition_type(transition_type)
+    , m_global_object(previous_shape.m_global_object)
     , m_previous(&previous_shape)
     , m_property_name(property_name)
-    , m_attributes(attributes)
     , m_prototype(previous_shape.m_prototype)
-    , m_transition_type(transition_type)
     , m_property_count(transition_type == TransitionType::Put ? previous_shape.m_property_count + 1 : previous_shape.m_property_count)
 {
 }
 
 Shape::Shape(Shape& previous_shape, Object* new_prototype)
-    : m_global_object(previous_shape.m_global_object)
+    : m_transition_type(TransitionType::Prototype)
+    , m_global_object(previous_shape.m_global_object)
     , m_previous(&previous_shape)
     , m_prototype(new_prototype)
-    , m_transition_type(TransitionType::Prototype)
     , m_property_count(previous_shape.m_property_count)
 {
 }
@@ -151,8 +151,6 @@ void Shape::ensure_property_table() const
         return;
     m_property_table = make<HashMap<StringOrSymbol, PropertyMetadata>>();
 
-    DeferGC defer(heap());
-
     u32 next_offset = 0;
 
     Vector<const Shape*, 64> transition_chain;
@@ -195,8 +193,10 @@ void Shape::reconfigure_property_in_unique_shape(const StringOrSymbol& property_
 {
     ASSERT(is_unique());
     ASSERT(m_property_table);
-    ASSERT(m_property_table->contains(property_name));
-    m_property_table->set(property_name, { m_property_table->size(), attributes });
+    auto it = m_property_table->find(property_name);
+    ASSERT(it != m_property_table->end());
+    it->value.attributes = attributes;
+    m_property_table->set(property_name, it->value);
 }
 
 void Shape::remove_property_from_unique_shape(const StringOrSymbol& property_name, size_t offset)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, the SerenityOS developers.
+ * Copyright (c) 2020, Matthew Olsson <matthewcolsson@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,42 +24,24 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "BoxBlurFilter.h"
-#include <LibGUI/BoxLayout.h>
-#include <LibGUI/Button.h>
-#include <LibGUI/CheckBox.h>
-#include <LibGUI/SpinBox.h>
+#pragma once
 
-namespace PixelPaint {
+#include <LibWeb/Layout/LayoutSVGGraphics.h>
 
-template<size_t N>
-BoxBlurFilter<N>::BoxBlurFilter()
-{
-}
+namespace Web {
 
-template<size_t N>
-BoxBlurFilter<N>::~BoxBlurFilter()
-{
-}
+class LayoutSVGPath final : public LayoutSVGGraphics {
+public:
+    LayoutSVGPath(DOM::Document&, SVG::SVGPathElement&, NonnullRefPtr<CSS::StyleProperties>);
+    virtual ~LayoutSVGPath() override = default;
 
-template<size_t N>
-OwnPtr<typename GenericConvolutionFilter<N>::Parameters>
-BoxBlurFilter<N>::get_parameters(Gfx::Bitmap& bitmap, const Gfx::IntRect& rect)
-{
-    Matrix<N, float> kernel;
+    SVG::SVGPathElement& node() { return downcast<SVG::SVGPathElement>(LayoutSVGGraphics::node()); }
 
-    for (size_t i = 0; i < N; ++i) {
-        for (size_t j = 0; j < N; ++j) {
-            kernel.elements()[i][j] = 1;
-        }
-    }
+    void layout(LayoutMode mode) override;
+    void paint(PaintContext& context, PaintPhase phase) override;
 
-    normalize(kernel);
-
-    return make<typename GenericConvolutionFilter<N>::Parameters>(bitmap, rect, kernel);
-}
+private:
+    virtual const char* class_name() const override { return "LayoutSVGPath"; }
+};
 
 }
-
-template class PixelPaint::BoxBlurFilter<3>;
-template class PixelPaint::BoxBlurFilter<5>;

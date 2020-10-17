@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, the SerenityOS developers.
+ * Copyright (c) 2020, Ben Jilks <benjyjilks@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,41 +26,29 @@
 
 #pragma once
 
-#include <LibGUI/Event.h>
+#include <AK/RefPtr.h>
 #include <LibGUI/Forward.h>
-#include <LibGfx/Forward.h>
+#include <LibGUI/Widget.h>
 
 namespace PixelPaint {
 
-class Filter {
+class Tool;
+
+class ToolPropertiesWidget final : public GUI::Widget {
+    C_OBJECT(ToolPropertiesWidget);
+
 public:
-    class Parameters {
-    public:
-        Parameters(Gfx::Bitmap& bitmap, const Gfx::IntRect& rect)
-            : m_target_bitmap(bitmap)
-            , m_target_rect(rect)
+    virtual ~ToolPropertiesWidget() override;
 
-        {
-        }
+    void set_active_tool(Tool*);
 
-        Gfx::Bitmap& bitmap() const { return m_target_bitmap; }
-        const Gfx::IntRect& rect() const { return m_target_rect; }
-        virtual bool is_generic_convolution_filter() const { return false; }
+private:
+    ToolPropertiesWidget();
 
-        virtual ~Parameters() { }
+    RefPtr<GUI::GroupBox> m_group_box;
 
-    private:
-        Gfx::Bitmap& m_target_bitmap;
-        Gfx::IntRect m_target_rect;
-    };
-    virtual ~Filter();
-
-    virtual const char* class_name() const = 0;
-
-    virtual void apply(const Parameters&) = 0;
-
-protected:
-    Filter();
+    Tool* m_active_tool { nullptr };
+    GUI::Widget* m_active_tool_widget { nullptr };
 };
 
 }

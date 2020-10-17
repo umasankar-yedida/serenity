@@ -120,7 +120,7 @@ CallExpression::ThisAndCallee CallExpression::compute_this_and_callee(Interprete
 
     if (m_callee->is_super_expression()) {
         // If we are calling super, |this| has not been initialized yet, and would not be meaningful to provide.
-        auto new_target = interpreter.vm().get_new_target();
+        auto new_target = vm.get_new_target();
         ASSERT(new_target.is_function());
         return { js_undefined(), new_target };
     }
@@ -128,16 +128,16 @@ CallExpression::ThisAndCallee CallExpression::compute_this_and_callee(Interprete
     if (m_callee->is_member_expression()) {
         auto& member_expression = static_cast<const MemberExpression&>(*m_callee);
         bool is_super_property_lookup = member_expression.object().is_super_expression();
-        auto lookup_target = is_super_property_lookup ? interpreter.current_environment()->get_super_base() : member_expression.object().execute(interpreter, global_object);
-        if (interpreter.exception())
+        auto lookup_target = is_super_property_lookup ? vm.current_environment()->get_super_base() : member_expression.object().execute(interpreter, global_object);
+        if (vm.exception())
             return {};
         if (is_super_property_lookup && lookup_target.is_nullish()) {
-            interpreter.vm().throw_exception<TypeError>(global_object, ErrorType::ObjectPrototypeNullOrUndefinedOnSuperPropertyAccess, lookup_target.to_string_without_side_effects());
+            vm.throw_exception<TypeError>(global_object, ErrorType::ObjectPrototypeNullOrUndefinedOnSuperPropertyAccess, lookup_target.to_string_without_side_effects());
             return {};
         }
 
         auto* this_value = is_super_property_lookup ? &vm.this_value(global_object).as_object() : lookup_target.to_object(global_object);
-        if (interpreter.exception())
+        if (vm.exception())
             return {};
         auto property_name = member_expression.computed_property_name(interpreter, global_object);
         if (!property_name.is_valid())
@@ -150,8 +150,9 @@ CallExpression::ThisAndCallee CallExpression::compute_this_and_callee(Interprete
 
 Value CallExpression::execute(Interpreter& interpreter, GlobalObject& global_object) const
 {
+    auto& vm = interpreter.vm();
     auto [this_value, callee] = compute_this_and_callee(interpreter, global_object);
-    if (interpreter.exception())
+    if (vm.exception())
         return {};
 
     ASSERT(!callee.is_empty());
@@ -167,29 +168,30 @@ Value CallExpression::execute(Interpreter& interpreter, GlobalObject& global_obj
             } else {
                 expression_string = static_cast<const MemberExpression&>(*m_callee).to_string_approximation();
             }
-            interpreter.vm().throw_exception<TypeError>(global_object, ErrorType::IsNotAEvaluatedFrom, callee.to_string_without_side_effects(), call_type, expression_string);
+            vm.throw_exception<TypeError>(global_object, ErrorType::IsNotAEvaluatedFrom, callee.to_string_without_side_effects(), call_type, expression_string);
         } else {
-            interpreter.vm().throw_exception<TypeError>(global_object, ErrorType::IsNotA, callee.to_string_without_side_effects(), call_type);
+            vm.throw_exception<TypeError>(global_object, ErrorType::IsNotA, callee.to_string_without_side_effects(), call_type);
         }
         return {};
     }
 
     auto& function = callee.as_function();
 
-    MarkedValueList arguments(interpreter.heap());
+    MarkedValueList arguments(vm.heap());
+    arguments.ensure_capacity(m_arguments.size());
 
     for (size_t i = 0; i < m_arguments.size(); ++i) {
         auto value = m_arguments[i].value->execute(interpreter, global_object);
-        if (interpreter.exception())
+        if (vm.exception())
             return {};
         if (m_arguments[i].is_spread) {
             get_iterator_values(global_object, value, [&](Value iterator_value) {
-                if (interpreter.exception())
+                if (vm.exception())
                     return IterationDecision::Break;
                 arguments.append(iterator_value);
                 return IterationDecision::Continue;
             });
-            if (interpreter.exception())
+            if (vm.exception())
                 return {};
         } else {
             arguments.append(value);
@@ -199,26 +201,26 @@ Value CallExpression::execute(Interpreter& interpreter, GlobalObject& global_obj
     Object* new_object = nullptr;
     Value result;
     if (is_new_expression()) {
-        result = interpreter.vm().construct(function, function, move(arguments), global_object);
+        result = vm.construct(function, function, move(arguments), global_object);
         if (result.is_object())
             new_object = &result.as_object();
     } else if (m_callee->is_super_expression()) {
-        auto* super_constructor = interpreter.current_environment()->current_function()->prototype();
+        auto* super_constructor = vm.current_environment()->current_function()->prototype();
         // FIXME: Functions should track their constructor kind.
         if (!super_constructor || !super_constructor->is_function()) {
-            interpreter.vm().throw_exception<TypeError>(global_object, ErrorType::NotAConstructor, "Super constructor");
+            vm.throw_exception<TypeError>(global_object, ErrorType::NotAConstructor, "Super constructor");
             return {};
         }
-        result = interpreter.vm().construct(static_cast<Function&>(*super_constructor), function, move(arguments), global_object);
-        if (interpreter.exception())
+        result = vm.construct(static_cast<Function&>(*super_constructor), function, move(arguments), global_object);
+        if (vm.exception())
             return {};
 
-        interpreter.current_environment()->bind_this_value(global_object, result);
+        vm.current_environment()->bind_this_value(global_object, result);
     } else {
-        result = interpreter.vm().call(function, this_value, move(arguments));
+        result = vm.call(function, this_value, move(arguments));
     }
 
-    if (interpreter.exception())
+    if (vm.exception())
         return {};
 
     if (is_new_expression()) {
@@ -262,6 +264,16 @@ Value WhileStatement::execute(Interpreter& interpreter, GlobalObject& global_obj
         last_value = interpreter.execute_statement(global_object, *m_body);
         if (interpreter.exception())
             return {};
+        if (interpreter.vm().should_unwind()) {
+            if (interpreter.vm().should_unwind_until(ScopeType::Continuable, m_label)) {
+                interpreter.vm().stop_unwind();
+            } else if (interpreter.vm().should_unwind_until(ScopeType::Breakable, m_label)) {
+                interpreter.vm().stop_unwind();
+                break;
+            } else {
+                return last_value;
+            }
+        }
     }
 
     return last_value;
@@ -276,6 +288,16 @@ Value DoWhileStatement::execute(Interpreter& interpreter, GlobalObject& global_o
         last_value = interpreter.execute_statement(global_object, *m_body);
         if (interpreter.exception())
             return {};
+        if (interpreter.vm().should_unwind()) {
+            if (interpreter.vm().should_unwind_until(ScopeType::Continuable, m_label)) {
+                interpreter.vm().stop_unwind();
+            } else if (interpreter.vm().should_unwind_until(ScopeType::Breakable, m_label)) {
+                interpreter.vm().stop_unwind();
+                break;
+            } else {
+                return last_value;
+            }
+        }
     } while (m_test->execute(interpreter, global_object).to_boolean());
 
     return last_value;
@@ -323,7 +345,7 @@ Value ForStatement::execute(Interpreter& interpreter, GlobalObject& global_objec
                     interpreter.vm().stop_unwind();
                     break;
                 } else {
-                    return js_undefined();
+                    return last_value;
                 }
             }
             if (m_update) {
@@ -344,7 +366,7 @@ Value ForStatement::execute(Interpreter& interpreter, GlobalObject& global_objec
                     interpreter.vm().stop_unwind();
                     break;
                 } else {
-                    return js_undefined();
+                    return last_value;
                 }
             }
             if (m_update) {
@@ -411,7 +433,7 @@ Value ForInStatement::execute(Interpreter& interpreter, GlobalObject& global_obj
                     interpreter.vm().stop_unwind();
                     break;
                 } else {
-                    return js_undefined();
+                    return last_value;
                 }
             }
         }
@@ -460,8 +482,6 @@ Value ForOfStatement::execute(Interpreter& interpreter, GlobalObject& global_obj
     if (interpreter.exception())
         return {};
 
-    if (interpreter.vm().should_unwind())
-        return js_undefined();
     return last_value;
 }
 
@@ -678,6 +698,7 @@ Value ClassMethod::execute(Interpreter& interpreter, GlobalObject& global_object
 
 Value ClassExpression::execute(Interpreter& interpreter, GlobalObject& global_object) const
 {
+    auto& vm = interpreter.vm();
     Value class_constructor_value = m_constructor->execute(interpreter, global_object);
     if (interpreter.exception())
         return {};
@@ -700,22 +721,22 @@ Value ClassExpression::execute(Interpreter& interpreter, GlobalObject& global_ob
 
         Object* super_constructor_prototype = nullptr;
         if (!super_constructor.is_null()) {
-            super_constructor_prototype = &super_constructor.as_object().get("prototype").as_object();
+            super_constructor_prototype = &super_constructor.as_object().get(vm.names.prototype).as_object();
             if (interpreter.exception())
                 return {};
         }
         prototype->set_prototype(super_constructor_prototype);
 
-        prototype->define_property("constructor", class_constructor, 0);
+        prototype->define_property(vm.names.constructor, class_constructor, 0);
         if (interpreter.exception())
             return {};
-        class_constructor->define_property("prototype", prototype, 0);
+        class_constructor->define_property(vm.names.prototype, prototype, 0);
         if (interpreter.exception())
             return {};
         class_constructor->set_prototype(super_constructor.is_null() ? global_object.function_prototype() : &super_constructor.as_object());
     }
 
-    auto class_prototype = class_constructor->get("prototype");
+    auto class_prototype = class_constructor->get(vm.names.prototype);
     if (interpreter.exception())
         return {};
 
@@ -1549,8 +1570,6 @@ Value ObjectExpression::execute(Interpreter& interpreter, GlobalObject& global_o
             continue;
         }
 
-        if (interpreter.exception())
-            return {};
         auto value = property.value().execute(interpreter, global_object);
         if (interpreter.exception())
             return {};
@@ -1595,22 +1614,11 @@ PropertyName MemberExpression::computed_property_name(Interpreter& interpreter, 
         ASSERT(m_property->is_identifier());
         return static_cast<const Identifier&>(*m_property).string();
     }
-    auto index = m_property->execute(interpreter, global_object);
+    auto value = m_property->execute(interpreter, global_object);
     if (interpreter.exception())
         return {};
-
-    ASSERT(!index.is_empty());
-
-    if (index.is_integer() && index.as_i32() >= 0)
-        return index.as_i32();
-
-    if (index.is_symbol())
-        return &index.as_symbol();
-
-    auto index_string = index.to_string(global_object);
-    if (interpreter.exception())
-        return {};
-    return index_string;
+    ASSERT(!value.is_empty());
+    return PropertyName::from_value(global_object, value);
 }
 
 String MemberExpression::to_string_approximation() const
@@ -1749,21 +1757,22 @@ void TaggedTemplateLiteral::dump(int indent) const
 
 Value TaggedTemplateLiteral::execute(Interpreter& interpreter, GlobalObject& global_object) const
 {
+    auto& vm = interpreter.vm();
     auto tag = m_tag->execute(interpreter, global_object);
-    if (interpreter.exception())
+    if (vm.exception())
         return {};
     if (!tag.is_function()) {
-        interpreter.vm().throw_exception<TypeError>(global_object, ErrorType::NotAFunction, tag.to_string_without_side_effects());
+        vm.throw_exception<TypeError>(global_object, ErrorType::NotAFunction, tag.to_string_without_side_effects());
         return {};
     }
     auto& tag_function = tag.as_function();
     auto& expressions = m_template_literal->expressions();
     auto* strings = Array::create(global_object);
-    MarkedValueList arguments(interpreter.heap());
+    MarkedValueList arguments(vm.heap());
     arguments.append(strings);
     for (size_t i = 0; i < expressions.size(); ++i) {
         auto value = expressions[i].execute(interpreter, global_object);
-        if (interpreter.exception())
+        if (vm.exception())
             return {};
         // tag`${foo}`             -> "", foo, ""                -> tag(["", ""], foo)
         // tag`foo${bar}baz${qux}` -> "foo", bar, "baz", qux, "" -> tag(["foo", "baz", ""], bar, qux)
@@ -1777,12 +1786,12 @@ Value TaggedTemplateLiteral::execute(Interpreter& interpreter, GlobalObject& glo
     auto* raw_strings = Array::create(global_object);
     for (auto& raw_string : m_template_literal->raw_strings()) {
         auto value = raw_string.execute(interpreter, global_object);
-        if (interpreter.exception())
+        if (vm.exception())
             return {};
         raw_strings->indexed_properties().append(value);
     }
-    strings->define_property("raw", raw_strings, 0);
-    return interpreter.vm().call(tag_function, js_undefined(), move(arguments));
+    strings->define_property(vm.names.raw, raw_strings, 0);
+    return vm.call(tag_function, js_undefined(), move(arguments));
 }
 
 void TryStatement::dump(int indent) const

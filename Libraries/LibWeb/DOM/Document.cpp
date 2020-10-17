@@ -77,6 +77,16 @@ Document::~Document()
 {
 }
 
+void Document::removed_last_ref()
+{
+    ASSERT(!ref_count());
+
+    if (m_referencing_node_count)
+        return;
+
+    delete this;
+}
+
 Origin Document::origin() const
 {
     if (!m_url.is_valid())
@@ -106,21 +116,6 @@ bool Document::is_child_allowed(const Node& node) const
     default:
         return false;
     }
-}
-
-void Document::fixup()
-{
-    if (!first_child() || !is<DocumentType>(*first_child()))
-        prepend_child(adopt(*new DocumentType(*this)));
-
-    if (is<HTML::HTMLHtmlElement>(first_child()->next_sibling()))
-        return;
-
-    auto body = create_element("body");
-    auto html = create_element("html");
-    html->append_child(body);
-    this->donate_all_children_to(body);
-    this->append_child(html);
 }
 
 const Element* Document::document_element() const

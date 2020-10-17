@@ -28,6 +28,7 @@
 #include "Parser.h"
 #include <AK/ScopeGuard.h>
 #include <AK/StdLibExtras.h>
+#include <AK/TemporaryChange.h>
 
 namespace JS {
 
@@ -393,9 +394,15 @@ RefPtr<FunctionExpression> Parser::try_parse_arrow_function_expression(bool expe
     if (function_length == -1)
         function_length = parameters.size();
 
+    auto old_labels_in_scope = move(m_parser_state.m_labels_in_scope);
+    ScopeGuard guard([&]() {
+        m_parser_state.m_labels_in_scope = move(old_labels_in_scope);
+    });
+
     bool is_strict = false;
 
     auto function_body_result = [&]() -> RefPtr<BlockStatement> {
+        TemporaryChange change(m_parser_state.m_in_function_context, true);
         if (match(TokenType::CurlyOpen)) {
             // Parse a function body with statements
             return parse_block_statement(is_strict);
@@ -439,7 +446,9 @@ RefPtr<Statement> Parser::try_parse_labelled_statement()
 
     if (!match_statement())
         return {};
+    m_parser_state.m_labels_in_scope.set(identifier);
     auto statement = parse_statement();
+    m_parser_state.m_labels_in_scope.remove(identifier);
 
     statement->set_label(identifier);
     state_rollback_guard.disarm();
@@ -1202,6 +1211,9 @@ NonnullRefPtr<NewExpression> Parser::parse_new_expression()
 
 NonnullRefPtr<ReturnStatement> Parser::parse_return_statement()
 {
+    if (!m_parser_state.m_in_function_context)
+        syntax_error("'return' not allowed outside of a function");
+
     consume(TokenType::Return);
 
     // Automatic semicolon insertion: terminate statement when return is followed by newline
@@ -1314,6 +1326,12 @@ NonnullRefPtr<FunctionNodeType> Parser::parse_function_node(bool check_for_funct
     if (function_length == -1)
         function_length = parameters.size();
 
+    TemporaryChange change(m_parser_state.m_in_function_context, true);
+    auto old_labels_in_scope = move(m_parser_state.m_labels_in_scope);
+    ScopeGuard guard([&]() {
+        m_parser_state.m_labels_in_scope = move(old_labels_in_scope);
+    });
+
     bool is_strict = false;
     auto body = parse_block_statement(is_strict);
     body->add_variables(m_parser_state.m_var_scopes.last());
@@ -1389,24 +1407,37 @@ NonnullRefPtr<BreakStatement> Parser::parse_break_statement()
     FlyString target_label;
     if (match(TokenType::Semicolon)) {
         consume();
-        return create_ast_node<BreakStatement>(target_label);
+    } else {
+        if (match(TokenType::Identifier) && !m_parser_state.m_current_token.trivia().contains('\n')) {
+            target_label = consume().value();
+            if (!m_parser_state.m_labels_in_scope.contains(target_label))
+                syntax_error(String::formatted("Label '{}' not found", target_label));
+        }
+        consume_or_insert_semicolon();
     }
-    if (match(TokenType::Identifier) && !m_parser_state.m_current_token.trivia().contains('\n'))
-        target_label = consume().value();
-    consume_or_insert_semicolon();
+
+    if (target_label.is_null() && !m_parser_state.m_in_break_context)
+        syntax_error("Unlabeled 'break' not allowed outside of a loop or switch statement");
+
     return create_ast_node<BreakStatement>(target_label);
 }
 
 NonnullRefPtr<ContinueStatement> Parser::parse_continue_statement()
 {
+    if (!m_parser_state.m_in_continue_context)
+        syntax_error("'continue' not allow outside of a loop");
+
     consume(TokenType::Continue);
     FlyString target_label;
     if (match(TokenType::Semicolon)) {
         consume();
         return create_ast_node<ContinueStatement>(target_label);
     }
-    if (match(TokenType::Identifier) && !m_parser_state.m_current_token.trivia().contains('\n'))
+    if (match(TokenType::Identifier) && !m_parser_state.m_current_token.trivia().contains('\n')) {
         target_label = consume().value();
+        if (!m_parser_state.m_labels_in_scope.contains(target_label))
+            syntax_error(String::formatted("Label '{}' not found", target_label));
+    }
     consume_or_insert_semicolon();
     return create_ast_node<ContinueStatement>(target_label);
 }
@@ -1443,7 +1474,11 @@ NonnullRefPtr<DoWhileStatement> Parser::parse_do_while_statement()
 {
     consume(TokenType::Do);
 
-    auto body = parse_statement();
+    auto body = [&]() -> NonnullRefPtr<Statement> {
+        TemporaryChange break_change(m_parser_state.m_in_break_context, true);
+        TemporaryChange continue_change(m_parser_state.m_in_continue_context, true);
+        return parse_statement();
+    }();
 
     consume(TokenType::While);
     consume(TokenType::ParenOpen);
@@ -1465,6 +1500,8 @@ NonnullRefPtr<WhileStatement> Parser::parse_while_statement()
 
     consume(TokenType::ParenClose);
 
+    TemporaryChange break_change(m_parser_state.m_in_break_context, true);
+    TemporaryChange continue_change(m_parser_state.m_in_continue_context, true);
     auto body = parse_statement();
 
     return create_ast_node<WhileStatement>(move(test), move(body));
@@ -1501,6 +1538,7 @@ NonnullRefPtr<SwitchCase> Parser::parse_switch_case()
     consume(TokenType::Colon);
 
     NonnullRefPtrVector<Statement> consequent;
+    TemporaryChange break_change(m_parser_state.m_in_break_context, true);
     while (match_statement())
         consequent.append(parse_statement());
 
@@ -1580,6 +1618,8 @@ NonnullRefPtr<Statement> Parser::parse_for_statement()
 
     consume(TokenType::ParenClose);
 
+    TemporaryChange break_change(m_parser_state.m_in_break_context, true);
+    TemporaryChange continue_change(m_parser_state.m_in_continue_context, true);
     auto body = parse_statement();
 
     if (in_scope) {
@@ -1605,6 +1645,9 @@ NonnullRefPtr<Statement> Parser::parse_for_in_of_statement(NonnullRefPtr<ASTNode
     auto in_or_of = consume();
     auto rhs = parse_expression(0);
     consume(TokenType::ParenClose);
+
+    TemporaryChange break_change(m_parser_state.m_in_break_context, true);
+    TemporaryChange continue_change(m_parser_state.m_in_continue_context, true);
     auto body = parse_statement();
     if (in_or_of.type() == TokenType::In)
         return create_ast_node<ForInStatement>(move(lhs), move(rhs), move(body));

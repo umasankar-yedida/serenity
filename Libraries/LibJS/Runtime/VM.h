@@ -30,6 +30,7 @@
 #include <AK/HashMap.h>
 #include <AK/RefCounted.h>
 #include <LibJS/Heap/Heap.h>
+#include <LibJS/Runtime/CommonPropertyNames.h>
 #include <LibJS/Runtime/ErrorTypes.h>
 #include <LibJS/Runtime/Exception.h>
 #include <LibJS/Runtime/MarkedValueList.h>
@@ -167,7 +168,7 @@ public:
         m_unwind_until_label = label;
     }
     void stop_unwind() { m_unwind_until = ScopeType::None; }
-    bool should_unwind_until(ScopeType type, FlyString label) const
+    bool should_unwind_until(ScopeType type, FlyString label = {}) const
     {
         if (m_unwind_until_label.is_null())
             return m_unwind_until == type;
@@ -222,6 +223,8 @@ public:
 
         return call(function, this_value);
     }
+
+    CommonPropertyNames names;
 
 private:
     VM();

@@ -158,7 +158,8 @@ const GUI::FileSystemModel::Node& DirectoryView::node(const GUI::ModelIndex& ind
 
 void DirectoryView::setup_model()
 {
-    m_model->set_root_path(Core::StandardPaths::desktop_directory());
+    if (is_desktop())
+        m_model->set_root_path(Core::StandardPaths::desktop_directory());
 
     m_model->on_error = [this](int, const char* error_string) {
         auto failed_path = m_model->root_path();
@@ -511,7 +512,7 @@ void DirectoryView::setup_actions()
             int fd = creat(new_file_path.characters(), 0666);
             if (fd < 0) {
                 auto saved_errno = errno;
-                GUI::MessageBox::show(window(), String::format("creat(\"{}\") failed: {}", new_file_path, strerror(saved_errno)), "Error", GUI::MessageBox::Type::Error);
+                GUI::MessageBox::show(window(), String::formatted("creat(\"{}\") failed: {}", new_file_path, strerror(saved_errno)), "Error", GUI::MessageBox::Type::Error);
                 return;
             }
             rc = close(fd);

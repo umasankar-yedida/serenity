@@ -24,41 +24,16 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "SpatialGaussianBlurFilter.h"
+#include <AK/TestSuite.h>
 
-namespace PixelPaint {
+#include <AK/Endian.h>
 
-template<size_t N, typename T>
-SpatialGaussianBlurFilter<N, T>::SpatialGaussianBlurFilter()
-{
-}
+static_assert(BigEndian<u32> {} == 0, "Big endian values should be default constructed in a constexpr context.");
 
-template<size_t N, typename T>
-SpatialGaussianBlurFilter<N, T>::~SpatialGaussianBlurFilter()
-{
-}
+static_assert(BigEndian<u32> { 42 } == 42, "Big endian values should be value constructed in a constexpr context.");
 
-template<size_t N, typename _T>
-OwnPtr<typename GenericConvolutionFilter<N>::Parameters>
-SpatialGaussianBlurFilter<N, _T>::get_parameters(Gfx::Bitmap& bitmap, const Gfx::IntRect& rect)
-{
-    Matrix<N, float> kernel;
-    auto sigma = 1.0f;
-    auto s = 2.0f * sigma * sigma;
+static_assert(LittleEndian<u32> {} == 0, "Little endian values should be default constructed in a constexpr context.");
 
-    for (auto x = -(ssize_t)N / 2; x <= (ssize_t)N / 2; x++) {
-        for (auto y = -(ssize_t)N / 2; y <= (ssize_t)N / 2; y++) {
-            auto r = sqrt(x * x + y * y);
-            kernel.elements()[x + 2][y + 2] = (exp(-(r * r) / s)) / (M_PI * s);
-        }
-    }
+static_assert(LittleEndian<u32> { 42 } == 42, "Little endian values should be value constructed in a constexpr context.");
 
-    normalize(kernel);
-
-    return make<typename GenericConvolutionFilter<N>::Parameters>(bitmap, rect, kernel);
-}
-
-}
-
-template class PixelPaint::SpatialGaussianBlurFilter<3>;
-template class PixelPaint::SpatialGaussianBlurFilter<5>;
+TEST_MAIN(Endian);

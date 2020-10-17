@@ -33,6 +33,8 @@
 #include <LibGUI/Window.h>
 #include <LibGfx/SystemTheme.h>
 
+REGISTER_WIDGET(Web, OutOfProcessWebView)
+
 namespace Web {
 
 OutOfProcessWebView::OutOfProcessWebView()
@@ -50,6 +52,18 @@ void OutOfProcessWebView::load(const URL& url)
 {
     m_url = url;
     client().post_message(Messages::WebContentServer::LoadURL(url));
+}
+
+void OutOfProcessWebView::load_html(const StringView& html, const URL& url)
+{
+    m_url = url;
+    client().post_message(Messages::WebContentServer::LoadHTML(html, url));
+}
+
+void OutOfProcessWebView::load_empty_document()
+{
+    m_url = {};
+    client().post_message(Messages::WebContentServer::LoadHTML("", {}));
 }
 
 void OutOfProcessWebView::paint_event(GUI::PaintEvent& event)
@@ -97,6 +111,13 @@ void OutOfProcessWebView::mouseup_event(GUI::MouseEvent& event)
 void OutOfProcessWebView::mousemove_event(GUI::MouseEvent& event)
 {
     client().post_message(Messages::WebContentServer::MouseMove(to_content_position(event.position()), event.button(), event.buttons(), event.modifiers()));
+}
+
+void OutOfProcessWebView::theme_change_event(GUI::ThemeChangeEvent& event)
+{
+    GUI::ScrollableWidget::theme_change_event(event);
+    client().post_message(Messages::WebContentServer::UpdateSystemTheme(Gfx::current_system_theme_buffer_id()));
+    request_repaint();
 }
 
 void OutOfProcessWebView::notify_server_did_paint(Badge<WebContentClient>, i32 shbuf_id)

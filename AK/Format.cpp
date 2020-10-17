@@ -465,7 +465,7 @@ void StandardFormatter::parse(TypeErasedFormatParams& params, FormatParser& pars
         m_mode = Mode::Pointer;
 
     if (!parser.is_eof())
-        dbg() << __PRETTY_FUNCTION__ << " did not consume '" << parser.remaining() << "'";
+        dbgln("{} did not consume '{}'", __PRETTY_FUNCTION__, parser.remaining());
 
     ASSERT(parser.is_eof());
 }
@@ -549,6 +549,17 @@ void Formatter<T, typename EnableIf<IsIntegral<T>::value>::Type>::format(TypeEra
         builder.put_i64(value, base, m_alternative_form, upper_case, m_zero_pad, m_align, width, m_fill, m_sign_mode);
 }
 
+void Formatter<char>::format(TypeErasedFormatParams& params, FormatBuilder& builder, char value)
+{
+    if (m_mode == Mode::Binary || m_mode == Mode::BinaryUppercase || m_mode == Mode::Decimal || m_mode == Mode::Octal || m_mode == Mode::Hexadecimal || m_mode == Mode::HexadecimalUppercase) {
+        // Trick: signed char != char. (Sometimes weird features are actually helpful.)
+        Formatter<signed char> formatter { *this };
+        return formatter.format(params, builder, static_cast<signed char>(value));
+    } else {
+        Formatter<StringView> formatter { *this };
+        return formatter.format(params, builder, { &value, 1 });
+    }
+}
 void Formatter<bool>::format(TypeErasedFormatParams& params, FormatBuilder& builder, bool value)
 {
     if (m_mode == Mode::Binary || m_mode == Mode::BinaryUppercase || m_mode == Mode::Decimal || m_mode == Mode::Octal || m_mode == Mode::Hexadecimal || m_mode == Mode::HexadecimalUppercase) {
@@ -594,12 +605,7 @@ void vwarn(StringView fmtstr, TypeErasedFormatParams params, bool newline)
 }
 #endif
 
-void raw_dbg(StringView string)
-{
-    const auto retval = dbgputstr(string.characters_without_null_termination(), string.length());
-    ASSERT(retval == 0);
-}
-void vdbg(StringView fmtstr, TypeErasedFormatParams params, bool newline)
+void vdbgln(StringView fmtstr, TypeErasedFormatParams params)
 {
     StringBuilder builder;
 
@@ -628,11 +634,12 @@ void vdbg(StringView fmtstr, TypeErasedFormatParams params, bool newline)
 #endif
 
     vformat(builder, fmtstr, params);
+    builder.append('\n');
 
-    if (newline && !builder.is_empty())
-        builder.append('\n');
+    const auto string = builder.build();
 
-    raw_dbg(builder.to_string());
+    const auto retval = dbgputstr(string.characters(), string.length());
+    ASSERT(retval == 0);
 }
 
 template struct Formatter<unsigned char, void>;
@@ -640,7 +647,6 @@ template struct Formatter<unsigned short, void>;
 template struct Formatter<unsigned int, void>;
 template struct Formatter<unsigned long, void>;
 template struct Formatter<unsigned long long, void>;
-template struct Formatter<char, void>;
 template struct Formatter<short, void>;
 template struct Formatter<int, void>;
 template struct Formatter<long, void>;

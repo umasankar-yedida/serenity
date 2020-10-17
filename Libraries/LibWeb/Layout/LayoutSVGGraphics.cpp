@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, the SerenityOS developers.
+ * Copyright (c) 2020, Matthew Olsson <matthewcolsson@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,20 +24,36 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include <LibWeb/Layout/LayoutSVGGraphics.h>
 
-#include "GenericConvolutionFilter.h"
+namespace Web {
 
-namespace PixelPaint {
+LayoutSVGGraphics::LayoutSVGGraphics(DOM::Document& document, SVG::SVGGraphicsElement& element, NonnullRefPtr<CSS::StyleProperties> properties)
+    : LayoutSVG(document, element, properties)
+{
+}
 
-class SharpenFilter : public GenericConvolutionFilter<3> {
-public:
-    SharpenFilter();
-    virtual ~SharpenFilter();
+void LayoutSVGGraphics::before_children_paint(PaintContext& context, LayoutNode::PaintPhase phase)
+{
+    LayoutSVG::before_children_paint(context, phase);
+    if (phase != LayoutNode::PaintPhase::Foreground)
+        return;
 
-    virtual const char* class_name() const override { return "SharpenFilter"; }
+    auto& graphics_element = downcast<SVG::SVGGraphicsElement>(node());
 
-    OwnPtr<GenericConvolutionFilter::Parameters> get_parameters(Gfx::Bitmap&, const Gfx::IntRect&);
-};
+    if (graphics_element.fill_color().has_value())
+        context.svg_context().set_fill_color(graphics_element.fill_color().value());
+    if (graphics_element.stroke_color().has_value())
+        context.svg_context().set_stroke_color(graphics_element.stroke_color().value());
+    if (graphics_element.stroke_width().has_value())
+        context.svg_context().set_stroke_width(graphics_element.stroke_width().value());
+}
+
+void LayoutSVGGraphics::layout(LayoutNode::LayoutMode mode)
+{
+    LayoutReplaced::layout(mode);
+
+    for_each_child([&](auto& child) { child.layout(mode); });
+}
 
 }

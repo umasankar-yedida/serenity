@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, the SerenityOS developers.
+ * Copyright (c) 2020, Matthew Olsson <matthewcolsson@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,20 +26,22 @@
 
 #pragma once
 
-#include "GenericConvolutionFilter.h"
-#include <AK/StdLibExtras.h>
+#include <LibWeb/Layout/LayoutSVG.h>
+#include <LibWeb/SVG/SVGElement.h>
+#include <LibWeb/SVG/SVGGraphicsElement.h>
 
-namespace PixelPaint {
+namespace Web {
 
-template<size_t N, typename = typename AK::EnableIf<N % 2 == 1>::Type>
-class SpatialGaussianBlurFilter : public GenericConvolutionFilter<N> {
+class LayoutSVGGraphics : public LayoutSVG {
 public:
-    SpatialGaussianBlurFilter();
-    virtual ~SpatialGaussianBlurFilter();
+    LayoutSVGGraphics(DOM::Document&, SVG::SVGGraphicsElement&, NonnullRefPtr<CSS::StyleProperties>);
+    virtual ~LayoutSVGGraphics() override = default;
 
-    virtual const char* class_name() const override { return "SpatialGaussianBlurFilter"; }
+    virtual void layout(LayoutMode mode) override;
+    virtual void before_children_paint(PaintContext& context, LayoutNode::PaintPhase phase) override;
 
-    OwnPtr<typename GenericConvolutionFilter<N>::Parameters> get_parameters(Gfx::Bitmap&, const Gfx::IntRect&);
+private:
+    virtual const char* class_name() const override { return "LayoutSVGGraphics"; }
 };
 
 }

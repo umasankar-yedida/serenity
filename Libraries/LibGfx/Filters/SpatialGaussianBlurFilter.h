@@ -24,16 +24,20 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "Filter.h"
+#pragma once
 
-namespace PixelPaint {
+#include "GenericConvolutionFilter.h"
+#include <AK/StdLibExtras.h>
 
-Filter::Filter()
-{
-}
+namespace Gfx {
 
-Filter::~Filter()
-{
-}
+template<size_t N, typename = typename AK::EnableIf<N % 2 == 1>::Type>
+class SpatialGaussianBlurFilter : public GenericConvolutionFilter<N> {
+public:
+    SpatialGaussianBlurFilter() { }
+    virtual ~SpatialGaussianBlurFilter() { }
+
+    virtual const char* class_name() const override { return "SpatialGaussianBlurFilter"; }
+};
 
 }

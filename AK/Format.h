@@ -41,7 +41,9 @@ class FormatParser;
 class FormatBuilder;
 
 template<typename T, typename = void>
-struct Formatter;
+struct Formatter {
+    using __no_formatter_defined = void;
+};
 
 constexpr size_t max_format_arguments = 256;
 
@@ -164,13 +166,9 @@ private:
 
 class TypeErasedFormatParams {
 public:
-    explicit TypeErasedFormatParams(Span<const TypeErasedParameter> parameters)
-        : m_parameters(parameters)
-    {
-    }
-
     Span<const TypeErasedParameter> parameters() const { return m_parameters; }
 
+    void set_parameters(Span<const TypeErasedParameter> parameters) { m_parameters = parameters; }
     size_t take_next_index() { return m_next_index++; }
 
     size_t decode(size_t value, size_t default_value = 0);
@@ -195,9 +193,9 @@ public:
     static_assert(sizeof...(Parameters) <= max_format_arguments);
 
     explicit VariadicFormatParams(const Parameters&... parameters)
-        : TypeErasedFormatParams(m_data)
-        , m_data({ TypeErasedParameter { &parameters, TypeErasedParameter::get_type<Parameters>(), __format_value<Parameters> }... })
+        : m_data({ TypeErasedParameter { &parameters, TypeErasedParameter::get_type<Parameters>(), __format_value<Parameters> }... })
     {
+        this->set_parameters(m_data);
     }
 
 private:
@@ -288,19 +286,18 @@ template<typename T>
 struct Formatter<T*> : StandardFormatter {
     void format(TypeErasedFormatParams& params, FormatBuilder& builder, T* value)
     {
+        if (m_mode == Mode::Default)
+            m_mode = Mode::Pointer;
+
         Formatter<FlatPtr> formatter { *this };
         formatter.format(params, builder, reinterpret_cast<FlatPtr>(value));
     }
 };
 
 template<>
-struct Formatter<char> : Formatter<StringView> {
-    void format(TypeErasedFormatParams& params, FormatBuilder& builder, char value)
-    {
-        Formatter<StringView>::format(params, builder, { &value, 1 });
-    }
+struct Formatter<char> : StandardFormatter {
+    void format(TypeErasedFormatParams&, FormatBuilder&, char value);
 };
-
 template<>
 struct Formatter<bool> : StandardFormatter {
     void format(TypeErasedFormatParams&, FormatBuilder&, bool value);
@@ -318,6 +315,9 @@ template<typename... Parameters>
 void new_out(StringView fmtstr, const Parameters&... parameters) { vout(fmtstr, VariadicFormatParams { parameters... }); }
 template<typename... Parameters>
 void outln(StringView fmtstr, const Parameters&... parameters) { vout(fmtstr, VariadicFormatParams { parameters... }, true); }
+template<typename... Parameters>
+void outln(const char* fmtstr, const Parameters&... parameters) { outln(StringView { fmtstr }, parameters...); }
+inline void outln() { raw_out("\n"); }
 
 void vwarn(StringView fmtstr, TypeErasedFormatParams, bool newline = false);
 void raw_warn(StringView string);
@@ -327,16 +327,55 @@ template<typename... Parameters>
 void new_warn(StringView fmtstr, const Parameters&... parameters) { vwarn(fmtstr, VariadicFormatParams { parameters... }); }
 template<typename... Parameters>
 void warnln(StringView fmtstr, const Parameters&... parameters) { vwarn(fmtstr, VariadicFormatParams { parameters... }, true); }
+template<typename... Parameters>
+void warnln(const char* fmtstr, const Parameters&... parameters) { warnln(StringView { fmtstr }, parameters...); }
+inline void warnln() { raw_out("\n"); }
 #endif
 
-void vdbg(StringView fmtstr, TypeErasedFormatParams, bool newline = false);
-void raw_dbg(StringView string);
+void vdbgln(StringView fmtstr, TypeErasedFormatParams);
 
-// FIXME: Rename this function to 'dbg' when that name becomes avaliable.
 template<typename... Parameters>
-void new_dbg(StringView fmtstr, const Parameters&... parameters) { vdbg(fmtstr, VariadicFormatParams { parameters... }); }
+void dbgln(StringView fmtstr, const Parameters&... parameters) { vdbgln(fmtstr, VariadicFormatParams { parameters... }); }
 template<typename... Parameters>
-void dbgln(StringView fmtstr, const Parameters&... parameters) { vdbg(fmtstr, VariadicFormatParams { parameters... }, true); }
+void dbgln(const char* fmtstr, const Parameters&... parameters) { dbgln(StringView { fmtstr }, parameters...); }
+
+template<typename T, typename = void>
+struct HasFormatter : TrueType {
+};
+template<typename T>
+struct HasFormatter<T, typename Formatter<T>::__no_formatter_defined> : FalseType {
+};
+
+template<typename T>
+class FormatIfSupported {
+public:
+    explicit FormatIfSupported(const T& value)
+        : m_value(value)
+    {
+    }
+
+    const T& value() const { return m_value; }
+
+private:
+    const T& m_value;
+};
+template<typename T, bool Supported = false>
+struct __FormatIfSupported : Formatter<StringView> {
+    void format(TypeErasedFormatParams& params, FormatBuilder& builder, const FormatIfSupported<T>&)
+    {
+        Formatter<StringView>::format(params, builder, "?");
+    }
+};
+template<typename T>
+struct __FormatIfSupported<T, true> : Formatter<T> {
+    void format(TypeErasedFormatParams& params, FormatBuilder& builder, const FormatIfSupported<T>& value)
+    {
+        Formatter<T>::format(params, builder, value.value());
+    }
+};
+template<typename T>
+struct Formatter<FormatIfSupported<T>> : __FormatIfSupported<T, HasFormatter<T>::value> {
+};
 
 } // namespace AK
 
@@ -351,5 +390,5 @@ using AK::warnln;
 #endif
 
 using AK::dbgln;
-using AK::new_dbg;
-using AK::raw_dbg;
+
+using AK::FormatIfSupported;
