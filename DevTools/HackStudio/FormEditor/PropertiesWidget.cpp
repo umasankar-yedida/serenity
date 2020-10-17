@@ -24,14 +24,16 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "PropertiesWindow.h"
+#include "PropertiesWidget.h"
 #include "WidgetPropertyModel.h"
 #include <LibGUI/BoxLayout.h>
 #include <LibGUI/ComboBox.h>
+#include <LibGUI/Label.h>
 #include <LibGUI/ModelEditingDelegate.h>
 #include <LibGUI/TableView.h>
 #include <LibGUI/TextBox.h>
 #include <LibGUI/Widget.h>
+#include <LibGfx/TextAlignment.h>
 
 namespace HackStudio {
 
@@ -78,18 +80,19 @@ public:
     }
 };
 
-PropertiesWindow::PropertiesWindow()
+PropertiesWidget::PropertiesWidget()
 {
-    set_title("Properties");
-    set_rect(780, 200, 240, 280);
-    set_icon(Gfx::Bitmap::load_from_file("/res/icons/16x16/app-visual-builder.png"));
+    set_fill_with_background_color(true);
+    set_layout<GUI::VerticalBoxLayout>();
+    layout()->set_margins({ 2, 2, 2, 2 });
 
-    auto& widget = set_main_widget<GUI::Widget>();
-    widget.set_fill_with_background_color(true);
-    widget.set_layout<GUI::VerticalBoxLayout>();
-    widget.layout()->set_margins({ 2, 2, 2, 2 });
+    auto& label = add<GUI::Label>();
+    label.set_text("Properties");
+    label.set_text_alignment(Gfx::TextAlignment::CenterLeft);
+    label.set_size_policy(GUI::SizePolicy::Fill, GUI::SizePolicy::Fixed);
+    label.set_preferred_size(0, 20);
 
-    m_table_view = widget.add<GUI::TableView>();
+    m_table_view = add<GUI::TableView>();
     m_table_view->set_column_headers_visible(false);
     m_table_view->set_editable(true);
 
@@ -107,7 +110,7 @@ PropertiesWindow::PropertiesWindow()
     };
 }
 
-PropertiesWindow::~PropertiesWindow()
+PropertiesWidget::~PropertiesWidget()
 {
 }
 

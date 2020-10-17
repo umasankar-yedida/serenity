@@ -26,15 +26,15 @@
 
 #pragma once
 
-#include <LibGUI/Window.h>
+#include <LibGUI/Widget.h>
 
 namespace HackStudio {
 
-class PropertiesWindow final : public GUI::Window {
-    C_OBJECT(PropertiesWindow)
+class PropertiesWidget final : public GUI::Widget {
+    C_OBJECT(PropertiesWidget)
 public:
-    PropertiesWindow();
-    ~PropertiesWindow();
+    PropertiesWidget();
+    ~PropertiesWidget();
 
     GUI::TableView& table_view() { return *m_table_view; }
     const GUI::TableView& table_view() const { return *m_table_view; }

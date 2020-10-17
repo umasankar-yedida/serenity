@@ -16,7 +16,7 @@ set(SOURCES
     FormEditor/Form.cpp
     FormEditor/FormWidget.cpp
     FormEditor/Property.cpp
-    FormEditor/PropertiesWindow.cpp
+    FormEditor/PropertiesWidget.cpp
     FormEditor/WidgetPropertyModel.cpp
     FormEditor/WidgetRegistry.cpp
     FindInFilesWidget.cpp

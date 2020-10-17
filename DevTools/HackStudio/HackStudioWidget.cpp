@@ -34,6 +34,9 @@
 #include "EditorWrapper.h"
 #include "FindInFilesWidget.h"
 #include "FormEditor/Form.h"
+#include "FormEditor/FormWidget.h"
+#include "FormEditor/PropertiesWidget.h"
+#include "FormEditor/WidgetPropertyModel.h"
 #include "FormEditor/WidgetRegistry.h"
 #include "Git/DiffViewer.h"
 #include "Git/GitWidget.h"
@@ -431,7 +434,11 @@ NonnullRefPtr<GUI::Action> HackStudioWidget::create_save_action()
         if (m_currently_open_file.is_empty())
             return;
 
-        current_editor().write_to_file(m_currently_open_file);
+        if (m_currently_open_file.ends_with(".frm")) {
+            m_form_editor_widget->write_to_file(m_currently_open_file);
+        } else {
+            current_editor().write_to_file(m_currently_open_file);
+        }
 
         if (m_git_widget->initialized())
             m_git_widget->refresh();
@@ -652,14 +659,6 @@ void HackStudioWidget::create_form_editor(GUI::Widget& parent)
     GUI::ActionGroup tool_actions;
     tool_actions.set_exclusive(true);
 
-    auto cursor_tool_action = GUI::Action::create_checkable("Cursor", Gfx::Bitmap::load_from_file("/res/icons/hackstudio/Cursor.png"), [this](auto&) {
-        // m_form_editor_widget->set_tool(make<CursorTool>(*m_form_editor_widget));
-    });
-    cursor_tool_action->set_checked(true);
-    tool_actions.add_action(cursor_tool_action);
-
-    form_widgets_toolbar.add_action(cursor_tool_action);
-
     GUI::WidgetClassRegistration::for_each([&, this](const GUI::WidgetClassRegistration& reg) {
         constexpr size_t gui_namespace_prefix_length = sizeof("GUI::") - 1;
         auto icon_path = String::format(
@@ -684,63 +683,17 @@ void HackStudioWidget::create_form_editor(GUI::Widget& parent)
     });
 
     auto& form_editor_inner_splitter = m_form_inner_container->add<GUI::HorizontalSplitter>();
+    m_form_editor_widget = form_editor_inner_splitter.add<Form>("Form1");
+    PropertiesWidget& properties_box = form_editor_inner_splitter.add<PropertiesWidget>();
 
-    auto& form_container = form_editor_inner_splitter.add<GUI::Widget>();
-    form_container.set_layout<GUI::VerticalBoxLayout>();
-
-    auto form = Form::construct("Form1");
-    form_container.add_child(*form);
-    m_form_editor_widget = *form;
-    m_form_editor_widget->on_widget_selected = [&](auto* widget) {
-        if (widget) {
-            dbg() << "Widget selected " << widget->gwidget()->class_name();
-        }
+    m_form_editor_widget->on_widget_selected = [&](FormWidget* widget) {
+        properties_box.table_view().set_model(widget ? &widget->property_model() : nullptr);
+        // FIXME: Not sure if this is the right approach.
+        //       When we set the model to the TableView, it's getting the focus.
+        //       This is kind of workaround to make a widget movable with keys.
+        //       I feel definitely there is a better way.
+        m_form_editor_widget->set_focus(true);
     };
-
-    auto& form_editing_pane_container = form_editor_inner_splitter.add<GUI::VerticalSplitter>();
-    form_editing_pane_container.set_size_policy(GUI::SizePolicy::Fixed, GUI::SizePolicy::Fill);
-    form_editing_pane_container.set_preferred_size(190, 0);
-    form_editing_pane_container.set_layout<GUI::VerticalBoxLayout>();
-
-    //    auto add_properties_pane = [&](auto& text, auto& pane_widget) {
-    //        auto& wrapper = form_editing_pane_container.add<GUI::Widget>();
-    //        wrapper.set_layout<GUI::VerticalBoxLayout>();
-    //        auto& label = wrapper.add<GUI::Label>(text);
-    //        label.set_fill_with_background_color(true);
-    //        label.set_text_alignment(Gfx::TextAlignment::CenterLeft);
-    //        label.set_font(Gfx::Font::default_bold_font());
-    //        label.set_size_policy(GUI::SizePolicy::Fill, GUI::SizePolicy::Fixed);
-    //        label.set_preferred_size(0, 16);
-    //        wrapper.add_child(pane_widget);
-    //    };
-
-    //    m_form_widget_tree_view = GUI::TreeView::construct();
-    //    m_form_widget_tree_view->set_model(m_form_editor_widget->model());
-    //    m_form_widget_tree_view->on_selection_change = [this] {
-    //        m_form_editor_widget->selection().disable_hooks();
-    //        m_form_editor_widget->selection().clear();
-    //        m_form_widget_tree_view->selection().for_each_index([this](auto& index) {
-    //            // NOTE: Make sure we don't add the FormWidget itself to the selection,
-    //            //       since that would allow you to drag-move the FormWidget.
-    //            if (index.internal_data() != &m_form_editor_widget->form_widget())
-    //                m_form_editor_widget->selection().add(*(GUI::Widget*)index.internal_data());
-    //        });
-    //        m_form_editor_widget->update();
-    //        m_form_editor_widget->selection().enable_hooks();
-    //    };
-
-    //    m_form_editor_widget->selection().on_add = [this](auto& widget) {
-    //        m_form_widget_tree_view->selection().add(m_form_editor_widget->model().index_for_widget(widget));
-    //    };
-    //    m_form_editor_widget->selection().on_remove = [this](auto& widget) {
-    //        m_form_widget_tree_view->selection().remove(m_form_editor_widget->model().index_for_widget(widget));
-    //    };
-    //    m_form_editor_widget->selection().on_clear = [this] {
-    //        m_form_widget_tree_view->selection().clear();
-    //    };
-
-    //    add_properties_pane("Form widget tree:", *m_form_widget_tree_view);
-    //    add_properties_pane("Widget properties:", *GUI::TableView::construct());
 }
 
 void HackStudioWidget::create_toolbar(GUI::Widget& parent)
