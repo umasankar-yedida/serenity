@@ -63,13 +63,13 @@ Form::Form(const String& name)
             widget->gwidget()->move_to_back();
     }));
     m_context_menu->add_separator();
-    m_context_menu->add_action(GUI::Action::create("Lay out horizontally", Gfx::Bitmap::load_from_file("/res/icons/16x16/layout-horizontally.png"), [this](auto&) {
+    m_context_menu->add_action(GUI::Action::create("Layout horizontally", Gfx::Bitmap::load_from_file("/res/icons/16x16/layout-horizontally.png"), [this](auto&) {
         if (auto* widget = single_selected_widget()) {
             dbg() << "Giving " << *widget->gwidget() << " a horizontal box layout";
             widget->gwidget()->set_layout<GUI::HorizontalBoxLayout>();
         }
     }));
-    m_context_menu->add_action(GUI::Action::create("Lay out vertically", Gfx::Bitmap::load_from_file("/res/icons/16x16/layout-vertically.png"), [this](auto&) {
+    m_context_menu->add_action(GUI::Action::create("Layout vertically", Gfx::Bitmap::load_from_file("/res/icons/16x16/layout-vertically.png"), [this](auto&) {
         if (auto* widget = single_selected_widget()) {
             dbg() << "Giving " << *widget->gwidget() << " a vertical box layout";
             widget->gwidget()->set_layout<GUI::VerticalBoxLayout>();
@@ -92,7 +92,7 @@ void Form::insert_widget(WidgetType type)
     auto widget = FormWidget::create(type, *this, insertion_parent);
     Gfx::IntPoint insertion_position = m_next_insertion_position;
     if (insertion_parent)
-        insertion_position.move_by(insertion_parent->gwidget()->window_relative_rect().location());
+        insertion_position.move_by(insertion_parent->gwidget()->rect().location());
     widget->set_rect({ insertion_position, { m_grid_size * 10 + 1, m_grid_size * 5 + 1 } });
     m_next_insertion_position.move_by(m_grid_size, m_grid_size);
     m_widgets.append(move(widget));
@@ -162,10 +162,6 @@ void Form::grabber_mousedown_event(GUI::MouseEvent& event, Direction grabber)
 
 void Form::keydown_event(GUI::KeyEvent& event)
 {
-    if (event.key() == KeyCode::Key_Delete) {
-        delete_selected_widgets();
-        return;
-    }
     if (event.key() == KeyCode::Key_Tab) {
         if (m_widgets.is_empty())
             return;
